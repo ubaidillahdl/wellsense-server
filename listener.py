@@ -18,7 +18,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
         print(f"\n[*] Koneksi Baru Masuk\t: {self.client_address}")
         try:
             # 1. Terima data mentah (Buffer 16KB untuk jaga-jaga paket besar)
-            self.request.settimeout(5.0)
+            # self.request.settimeout(5.0)
             self.raw_data = self.request.recv(16384).decode("utf-8", errors="ignore")
             if not self.raw_data:
                 return

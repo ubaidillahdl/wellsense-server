@@ -476,7 +476,7 @@ class MedStabilizer:
 
     def get_stable_value(self, new_value):
         # 1. Masukkan data baru
-        self.buffer.append(new_value)
+        self.buffer.append(float(new_value))
 
         # 2. Jaga ukuran jendela (window) agar tetap (misal: 5 data terakhir)
         if len(self.buffer) > self.window_size:
