@@ -16,7 +16,7 @@ class WellSenseDB:
 
     def triger_dashboard(self, token):
         """Mengirim sinyal ke Laravel API untuk update dashboard"""
-        url = "http://192.168.0.105/api/v1/send-health-data"
+        url = "http://192.168.100.27/api/v1/send-health-data"
         payload = {"token_perangkat": str(token)}
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
