@@ -466,7 +466,7 @@ class ANNModel:
             self.ymax_out - self.ymin_out
         ) + self.xmin_out
 
-        return round(float(prediction), 4)
+        return round(float(prediction.item()), 4)
 
 
 class MedStabilizer:
