@@ -7,7 +7,7 @@ from datetime import datetime
 class WellSenseDB:
     def __init__(self):
         # Sesuaikan path dengan lokasi database.sqlite Laravel di VPS nanti
-        self.db_path = "D:/laragon/www/wellsense/database/database.sqlite"
+        self.db_path = "C:/laragon/www/wellsense-server/database/database.sqlite"
 
     def get_connection(self):
         """SQLite tidak butuh maintain koneksi seperti MySQL,
