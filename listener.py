@@ -85,7 +85,10 @@ class TCPHandler(socketserver.BaseRequestHandler):
             print("[!] Koneksi Baru Masuk\t: Timeout")
 
         except Exception as e:
+            import traceback
+
             print(f"[!] Listener Error\t: {e}")
+            traceback.print_exc()
 
     @staticmethod
     def start_listener(host, port, shared_queue, engine_ref=None):
