@@ -18,7 +18,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
         print(f"\n[*] Koneksi Baru Masuk\t: {self.client_address}")
         try:
             # 1. Terima data mentah (Buffer 16KB untuk jaga-jaga paket besar)
-            self.request.settimeout(5.0)
+            self.request.settimeout(15.0)
             while True:
                 self.raw_data = self.request.recv(16384).decode("utf-8", errors="ignore")
                 if not self.raw_data:
@@ -29,7 +29,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
                     self.request.sendall(b"PONG")
                     print("[*] Heartbeat\t\t: PONG dikirim")
                     
-                    self.request.settimeout(20.0)
+                    self.request.settimeout(30.0)
                     continue  # selesai, tidak perlu proses data
 
                 # --- TAMBAHAN: PEMISAHAN TOKEN DAN DATA ---
