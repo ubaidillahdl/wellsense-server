@@ -18,68 +18,73 @@ class TCPHandler(socketserver.BaseRequestHandler):
         print(f"\n[*] Koneksi Baru Masuk\t: {self.client_address}")
         try:
             # 1. Terima data mentah (Buffer 16KB untuk jaga-jaga paket besar)
-            # self.request.settimeout(5.0)
-            self.raw_data = self.request.recv(16384).decode("utf-8", errors="ignore")
-            if not self.raw_data:
-                return
+            self.request.settimeout(5.0)
+            while True:
+                self.raw_data = self.request.recv(16384).decode("utf-8", errors="ignore")
+                if not self.raw_data:
+                    break
 
-            # --- HEARTBEAT CHECK ---
-            if self.raw_data.strip() == "PING":
-                self.request.sendall(b"PONG")
-                print("[*] Heartbeat\t\t: PONG dikirim")
-                return  # selesai, tidak perlu proses data
+                # --- HEARTBEAT CHECK ---
+                if self.raw_data.strip() == "PING":
+                    self.request.sendall(b"PONG")
+                    print("[*] Heartbeat\t\t: PONG dikirim")
+                    
+                    self.request.settimeout(20.0)
+                    continue  # selesai, tidak perlu proses data
 
-            # --- TAMBAHAN: PEMISAHAN TOKEN DAN DATA ---
-            # data_parts[0] adalah TOKEN, data_parts[1] adalah SINYAL
-            data_parts = self.raw_data.strip().split("|")
-            token_perangkat = data_parts[0]
-            signal_payload = data_parts[1]
+                # --- TAMBAHAN: PEMISAHAN TOKEN DAN DATA ---
+                # data_parts[0] adalah TOKEN, data_parts[1] adalah SINYAL
+                data_parts = self.raw_data.strip().split("|")
+                token_perangkat = data_parts[0]
+                signal_payload = data_parts[1]
 
-            # 2. Parsing format "IR:RED,IR:RED," menjadi list angka
-            clean_data = signal_payload.strip().rstrip(",")
-            raw_pairs = clean_data.split(",")
+                # 2. Parsing format "IR:RED,IR:RED," menjadi list angka
+                clean_data = signal_payload.strip().rstrip(",")
+                raw_pairs = clean_data.split(",")
 
-            list_ir, list_red = [], []
-            for pair in raw_pairs:
-                if ":" in pair:
-                    try:
-                        p_ir, p_red = pair.split(":")
-                        list_ir.append(int(p_ir))
-                        list_red.append(int(p_red))
-                    except ValueError:
-                        continue
+                list_ir, list_red = [], []
+                for pair in raw_pairs:
+                    if ":" in pair:
+                        try:
+                            p_ir, p_red = pair.split(":")
+                            list_ir.append(int(p_ir))
+                            list_red.append(int(p_red))
+                        except ValueError:
+                            continue
 
-            # 3. Validasi: Pastikan list tidak kosong sebelum diproses
-            if list_ir and list_red:
-                print(f"[*] {len(list_ir)} Data Diterima\t: {token_perangkat}")
-                print(f"[*] Standar Deviasi IR\t: {np.std(list_ir):.0f}")
-                print(f"[*] Standar Deviasi Red\t: {np.std(list_red):.0f}")
+                # 3. Validasi: Pastikan list tidak kosong sebelum diproses
+                if list_ir and list_red:
+                    print(f"[*] {len(list_ir)} Data Diterima\t: {token_perangkat}")
+                    print(f"[*] Standar Deviasi IR\t: {np.std(list_ir):.0f}")
+                    print(f"[*] Standar Deviasi Red\t: {np.std(list_red):.0f}")
 
-                if self.engine_ref:
-                    # Masukkan data ke mesin hitung ANN
-                    res = self.engine_ref.process_package(
-                        list_red, list_ir, token_perangkat
-                    )
-                    feedback = self.engine_ref.get_feedback()
+                    if self.engine_ref:
+                        # Masukkan data ke mesin hitung ANN
+                        res = self.engine_ref.process_package(
+                            list_red, list_ir, token_perangkat
+                        )
+                        feedback = self.engine_ref.get_feedback()
 
-                    # A. Feedback ke Arduino/SIM800C
-                    if feedback:
-                        self.request.sendall(feedback.encode("utf-8"))
-                        print(f"[*] Data Baru Terkirim\t: {feedback.strip()}")
+                        # A. Feedback ke Arduino/SIM800C
+                        if feedback:
+                            self.request.sendall(feedback.encode("utf-8"))
+                            print(f"[*] Data Baru Terkirim\t: {feedback.strip()}")
 
-                    # B. Logika Pesan Status (Independent: Selalu muncul)
-                    if res and res["status"] != "VALID":
-                        msg = "Keadaan Sinyal\t: Tidak Stabil"
-                        print(f"\r[!] {msg}\n", end="", flush=True)
+                        # B. Logika Pesan Status (Independent: Selalu muncul)
+                        if res and res["status"] != "VALID":
+                            msg = "Keadaan Sinyal\t: Tidak Stabil"
+                            print(f"\r[!] {msg}\n", end="", flush=True)
 
-                    # C. Logika Print Tabel (Hanya jika Headless / Mode Terminal)
-                    if not TCPHandler.is_gui and res["status"] == "VALID":
-                        # Memanggil fungsi tabel dari engine
-                        self.engine_ref._print_table(res["vitals_display"])
+                        # C. Logika Print Tabel (Hanya jika Headless / Mode Terminal)
+                        if not TCPHandler.is_gui and res["status"] == "VALID":
+                            # Memanggil fungsi tabel dari engine
+                            self.engine_ref._print_table(res["vitals_display"])
 
-                # 4. Kirim data ke Queue untuk divisualisasikan oleh Plotter
-                if self.data_queue is not None:
-                    self.data_queue.put({"red": list_red, "ir": list_ir})
+                    # 4. Kirim data ke Queue untuk divisualisasikan oleh Plotter
+                    if self.data_queue is not None:
+                        self.data_queue.put({"red": list_red, "ir": list_ir})
+
+                    break
 
         except socket.timeout:
             print("[!] Koneksi Baru Masuk\t: Timeout")
