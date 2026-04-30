@@ -87,13 +87,18 @@ class TCPHandler(socketserver.BaseRequestHandler):
                     break
 
         except socket.timeout:
-            print("[!] Koneksi Baru Masuk\t: Timeout")
+            # print("[!] Koneksi Baru Masuk\t: Timeout")
+            print(f"[!] Timeout: Sesi {self.client_address} diputus otomatis.")
 
         except Exception as e:
             # import traceback
 
             print(f"[!] Listener Error\t: {e}")
             # traceback.print_exc()
+
+        finally:
+            # Best practice: Tutup request secara eksplisit
+            self.request.close()
 
     @staticmethod
     def start_listener(host, port, shared_queue, engine_ref=None):
