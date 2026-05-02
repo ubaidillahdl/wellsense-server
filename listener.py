@@ -20,15 +20,20 @@ class TCPHandler(socketserver.BaseRequestHandler):
             # 1. Terima data mentah (Buffer 16KB untuk jaga-jaga paket besar)
             self.request.settimeout(15.0)
             while True:
-                self.raw_data = self.request.recv(16384).decode("utf-8", errors="ignore")
+                self.raw_data = self.request.recv(16384).decode(
+                    "utf-8", errors="ignore"
+                )
                 if not self.raw_data:
+                    print(
+                        f"[*] Info: Host {self.client_address} telah menutup koneksi."
+                    )
                     break
 
                 # --- HEARTBEAT CHECK ---
                 if self.raw_data.strip() == "PING":
                     self.request.sendall(b"PONG")
                     print("[*] Heartbeat\t\t: PONG dikirim")
-                    
+
                     self.request.settimeout(30.0)
                     continue  # selesai, tidak perlu proses data
 
@@ -88,7 +93,10 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
         except socket.timeout:
             # print("[!] Koneksi Baru Masuk\t: Timeout")
-            print(f"[!] Timeout: Sesi {self.client_address} diputus otomatis.")
+            print(f"[!] Timeout: Koneksi {self.client_address} diputus otomatis.")
+
+        except ConnectionResetError:
+            print(f"[!] Warning: Koneksi {self.client_address} diputus perangkat.")
 
         except Exception as e:
             # import traceback
@@ -98,6 +106,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
         finally:
             # Best practice: Tutup request secara eksplisit
+            print(f"[*] Sesi {self.client_address} ditutup secara total.\n")
             self.request.close()
 
     @staticmethod
