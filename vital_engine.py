@@ -55,7 +55,11 @@ class VitalEngine:
         self.last_result = output
         self.graph_ready = True
 
-        self.feedback_str = f"*0;0;0;0;0;{int(round(std_val))}#\n"
+        now = datetime.datetime.now()
+        self.feedback_str = (
+            f"*0;0;0;0;0;{int(round(std_val))};{now.hour};{now.minute};{now.second}#\n"
+        )
+
         self.new_data_available = True
 
         # --- 2. GATEKEEPER (Cek Sensor) ---
@@ -162,7 +166,6 @@ class VitalEngine:
                     )
 
                     # Siapkan feedback untuk Arduino via Listener
-                    now = datetime.datetime.now()
                     self.feedback_str = f"*{int(round(s_hr))};{int(round(s_spo2))};{int(round(s_sbp))};{int(round(s_dbp))};{int(round(s_hb))};{int(round(std_val))};{now.hour};{now.minute};{now.second}#\n"
                     # self.feedback_str = f"*{int(round(s_hr))};{int(round(s_spo2))};{int(round(s_sbp))};{int(round(s_dbp))};{int(round(s_hb))};{int(round(std_val))}#\n"
                     self.new_data_available = True
