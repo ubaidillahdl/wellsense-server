@@ -1,4 +1,5 @@
 import numpy as np
+import datetime
 from processor import Processor
 from database import WellSenseDB
 
@@ -161,7 +162,9 @@ class VitalEngine:
                     )
 
                     # Siapkan feedback untuk Arduino via Listener
-                    self.feedback_str = f"*{int(round(s_hr))};{int(round(s_spo2))};{int(round(s_sbp))};{int(round(s_dbp))};{int(round(s_hb))};{int(round(std_val))}#\n"
+                    now = datetime.datetime.now()
+                    self.feedback_str = f"*{int(round(s_hr))};{int(round(s_spo2))};{int(round(s_sbp))};{int(round(s_dbp))};{int(round(s_hb))};{int(round(std_val))};{now.hour};{now.minute};{now.second}#\n"
+                    # self.feedback_str = f"*{int(round(s_hr))};{int(round(s_spo2))};{int(round(s_sbp))};{int(round(s_dbp))};{int(round(s_hb))};{int(round(std_val))}#\n"
                     self.new_data_available = True
 
                     # Update output lengkap untuk Plotter
