@@ -7,7 +7,8 @@ from datetime import datetime
 class WellSenseDB:
     def __init__(self):
         # Sesuaikan path dengan lokasi database.sqlite Laravel di VPS nanti
-        self.db_path = "C:/laragon/www/wellsense-server/database/database.sqlite"
+        # self.db_path = "C:/laragon/www/wellsense-server/database/database.sqlite"
+        self.db_path = "D:/laragon/www/wellsense-monitor/database/database.sqlite"
 
     def get_connection(self):
         """SQLite tidak butuh maintain koneksi seperti MySQL,
@@ -16,7 +17,7 @@ class WellSenseDB:
 
     def triger_dashboard(self, token):
         """Mengirim sinyal ke Laravel API untuk update dashboard"""
-        url = "http://192.168.100.27/api/v1/send-health-data"
+        url = "http://192.168.0.10/api/v1/send-health-data"
         payload = {"token_perangkat": str(token)}
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
@@ -43,6 +44,31 @@ class WellSenseDB:
             return result
         except Exception as e:
             print(f"[!] Lookup Error: {e}")
+            return None
+
+    def get_user_profile(self, token):
+        """Mengambil jenis_kelamin dan umur pengguna berdasarkan token perangkat"""
+        try:
+            conn = self.get_connection()
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            query = """
+                SELECT 
+                    u.jenis_kelamin,
+                    u.tanggal_lahir,
+                    (strftime('%Y', 'now') - strftime('%Y', u.tanggal_lahir)) AS age
+                FROM perangkat p
+                JOIN pengguna u ON p.pengguna_id = u.id
+                WHERE p.token_perangkat = ?
+            """
+            cursor.execute(query, (token,))
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            return result
+        except Exception as e:
+            print(f"[!] Get User Profile Error: {e}")
             return None
 
     def save_health_data(

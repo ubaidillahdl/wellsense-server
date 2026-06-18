@@ -14,19 +14,63 @@ class VitalEngine:
         self.graph_ready = False  # Penanda untuk Plotter (Grafik)
         self.db = WellSenseDB()
 
+        # --- SBP ---
+        self.calib_data_sbp = [
+            (117, 110),  # (prediksi, target) - titik 1
+            (124, 116),  # (prediksi, target) - titik 2
+            # Tambahkan data lain di sini jika ada
+            # (130, 125),
+            # (115, 108),
+            # (140, 135),
+        ]
+
+        # --- DBP ---
+        self.calib_data_dbp = [
+            (58, 80),  # (prediksi, target) - titik 1
+            (62, 78),  # (prediksi, target) - titik 2
+            # (75, 78),
+            # (70, 72),
+            # (85, 88),
+        ]
+
+        # --- HB ---
+        self.calib_data_hb = [
+            (150, 149),  # (prediksi, target) - titik 1
+            (152, 151),  # (prediksi, target) - titik 2
+            # (148, 147),
+            # (155, 154),
+        ]
+
+        # --- Hitung regresi linear dengan numpy ---
+        self.calib_sbp_a, self.calib_sbp_b = self._regresi_linear_numpy(
+            self.calib_data_sbp
+        )
+        self.calib_dbp_a, self.calib_dbp_b = self._regresi_linear_numpy(
+            self.calib_data_dbp
+        )
+        self.calib_hb_a, self.calib_hb_b = self._regresi_linear_numpy(
+            self.calib_data_hb
+        )
+
     def process_package(self, red_data, ir_data, token_perangkat=None):
         """Alur: Pre-processing -> Gatekeeper -> ANN Analysis"""
         if not ir_data or not token_perangkat:
             print("[!] Data atau Token kosong!")
             return None
 
-        # --- 0. VALIDASI TOKEN (PINTU UTAMA) ---
-        # Cari tahu siapa pemilik token ini di database Laravel
+        # --- 0. VALIDASI TOKEN & USER PROFILE ---
         device_info = self.db.get_device_info(token_perangkat)
-
         if not device_info:
             print(f"[!] Akses Ditolak: Token {token_perangkat} tidak terdaftar!")
             return None
+
+        user_profile = self.db.get_user_profile(token_perangkat)
+        if not user_profile:
+            print(f"[!] Data pengguna tidak ditemukan untuk token {token_perangkat}")
+            return None
+
+        gender = 1 if user_profile["jenis_kelamin"] == "L" else 0
+        age = user_profile["age"]
 
         # --- 1. PRE-PROCESSING (Sinyal Mentah) ---
         ac_ir, v_dc_ir = self.processor.dc_remover(ir_data)
@@ -83,46 +127,56 @@ class VitalEngine:
                 w_out = self.processor.extract_w1_w2(cycle, t_cycle, self.fs)
 
                 if w_out:
-                    # Hitung parameter vital
+                    # --- Hitung SpO2 ---
                     spo2 = self.processor.calculate_spo2(
                         v_ac_ir, v_dc_ir, v_ac_red, v_dc_red
                     )
-                    sbp = self.processor.model_sbp.calculate(
-                        [
-                            w_out["sysTime"],
-                            w_out["w1W2Ratio"],
-                            w_out["heartRate"],
-                            w_out["diasTime"],
-                            w_out["cycleDuration"],
-                        ]
+
+                    # --- Prediksi ANN (3 Model Terpisah) ---
+                    features_sbp = [
+                        gender,
+                        age,
+                        w_out["relWidthW1"],
+                        w_out["heartRate"],
+                    ]
+                    sbp_raw = self.processor.model_sbp.calculate(features_sbp)
+
+                    features_dbp = [
+                        gender,
+                        age,
+                        w_out["w1W2Ratio"],
+                        w_out["w1centerTime"],
+                        w_out["heartRate"],
+                    ]
+                    dbp_raw = self.processor.model_dbp.calculate(features_dbp)
+
+                    features_hb = [
+                        gender,
+                        age,
+                        w_out["w1W2Ratio"],
+                        w_out["heartRate"],
+                    ]
+                    hb_raw = self.processor.model_hb.calculate(features_hb)
+
+                    # --- Kalibrasi (Koreksi Bias Sistematis) ---
+                    sbp_calibrated = self._kalibrasi(
+                        sbp_raw, self.calib_sbp_a, self.calib_sbp_b
                     )
-                    dbp = self.processor.model_dbp.calculate(
-                        [
-                            w_out["w1W2Ratio"],
-                            w_out["sysTime"],
-                            w_out["relWidthW1"],
-                            w_out["heartRate"],
-                            w_out["diasTime"],
-                        ]
+                    dbp_calibrated = self._kalibrasi(
+                        dbp_raw, self.calib_dbp_a, self.calib_dbp_b
                     )
-                    hb = self.processor.model_hb.calculate(
-                        [
-                            w_out["sysTime"],
-                            w_out["w1W2Ratio"],
-                            w_out["diasTime"],
-                            w_out["relWidthW2"],
-                            w_out["widthW2"],
-                        ]
+                    hb_calibrated = self._kalibrasi(
+                        hb_raw, self.calib_hb_a, self.calib_hb_b
                     )
 
                     # Filter angka agar stabil
                     s_hr = self.processor.hr_filter.get_stable_value(w_out["heartRate"])
                     s_spo2 = self.processor.spo2_filter.get_stable_value(spo2)
-                    s_sbp = self.processor.sbp_filter.get_stable_value(sbp)
-                    s_dbp = self.processor.dbp_filter.get_stable_value(dbp)
-                    s_hb = self.processor.hb_filter.get_stable_value(hb) * 10  # g/L
+                    s_sbp = self.processor.sbp_filter.get_stable_value(sbp_calibrated)
+                    s_dbp = self.processor.dbp_filter.get_stable_value(dbp_calibrated)
+                    s_hb = self.processor.hb_filter.get_stable_value(hb_calibrated)
 
-                    # --- INTEGRASI KE DATABASE MILIK ABANG ---
+                    # --- INTEGRASI KE DATABASE  ---
                     # Bungkus ke dictionary sesuai kebutuhan save_health_data
                     vitals_dict = {
                         "hr": s_hr,
@@ -167,7 +221,6 @@ class VitalEngine:
 
                     # Siapkan feedback untuk Arduino via Listener
                     self.feedback_str = f"*{int(round(s_hr))};{int(round(s_spo2))};{int(round(s_sbp))};{int(round(s_dbp))};{int(round(s_hb))};{int(round(std_val))};{now.hour};{now.minute};{now.second}#\n"
-                    # self.feedback_str = f"*{int(round(s_hr))};{int(round(s_spo2))};{int(round(s_sbp))};{int(round(s_dbp))};{int(round(s_hb))};{int(round(std_val))}#\n"
                     self.new_data_available = True
 
                     # Update output lengkap untuk Plotter
@@ -236,3 +289,23 @@ class VitalEngine:
         print("├─────────────────────┼─────────────────────┤")
         print(f"│ HEMOGLOBIN (Hb)     │  {v[4]:>8.4f} g/L       │")
         print("└─────────────────────┴─────────────────────┘")
+
+    def _regresi_linear_numpy(self, data):
+        """Regresi linear dengan numpy.polyfit"""
+        if len(data) < 2:
+            # Jika data < 2, pakai koreksi konstan
+            if data:
+                x1, y1 = data[0]
+                return 1, y1 - x1
+            return 1, 0
+
+        x = np.array([d[0] for d in data])
+        y = np.array([d[1] for d in data])
+
+        # polyfit derajat 1 (linear)
+        a, b = np.polyfit(x, y, 1)
+        return a, b
+
+    def _kalibrasi(self, prediksi, a, b):
+        """Terapkan koreksi linear"""
+        return a * prediksi + b

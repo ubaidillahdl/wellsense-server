@@ -23,6 +23,7 @@ class Processor:
         # --- Inisialisasi Model AI (ANN) ---
         current_dir = os.path.dirname(os.path.abspath(__file__))
         models_to_load = ["sbp", "dbp", "hb"]
+        # models_to_load = ["bp", "hb"]
         self.loaded_models = {}
 
         for name in models_to_load:
@@ -43,6 +44,7 @@ class Processor:
         # Shortcut akses model (untuk mempermudah pemanggilan)
         self.model_sbp = self.loaded_models.get("sbp")
         self.model_dbp = self.loaded_models.get("dbp")
+        # self.model_bp = self.loaded_models.get("bp")
         self.model_hb = self.loaded_models.get("hb")
 
         # --- Inisialisasi untuk masing-masing parameter ---
@@ -407,66 +409,79 @@ class Processor:
 
 class ANNModel:
     def __init__(self, data_json):
-        # 1. Bobot & Bias (Pastikan tipe data float)
-        self.W1 = np.array(data_json["W1"], dtype=float)
-        self.b1 = np.array(data_json["b1"], dtype=float).reshape(-1, 1)
-        self.W2 = np.array(data_json["W2"], dtype=float).reshape(1, -1)
-        self.b2 = np.array(data_json["b2"], dtype=float).flatten()[
-            0
-        ]  # Ambil sebagai skalar
+        # Bobot & Bias
+        self.W1 = np.array(data_json["weights_W1"], dtype=float)
+        self.b1 = np.array(data_json["weights_b1"], dtype=float).reshape(-1, 1)
+        self.W2 = np.array(data_json["weights_W2"], dtype=float)
+        self.b2 = np.array(data_json["weights_b2"], dtype=float).reshape(-1, 1)
 
-        # 2. Parameter Z-Score (Dari CSV Mentah)
-        self.mean_in = np.array(data_json["mean_in"], dtype=float).reshape(-1, 1)
-        self.std_in = np.array(data_json["std_in"], dtype=float).reshape(-1, 1)
-
-        # 3. Parameter MapMinMax (Input)
-        self.xmin_in = np.array(data_json["norm_in"]["xmin"], dtype=float).reshape(
+        # Manual Min-Max (Input & Output)
+        self.minX = np.array(data_json["normalization_minX"], dtype=float).reshape(
             -1, 1
         )
-        self.xmax_in = np.array(data_json["norm_in"]["xmax"], dtype=float).reshape(
+        self.maxX = np.array(data_json["normalization_maxX"], dtype=float).reshape(
             -1, 1
         )
-        self.ymin_in = float(data_json["norm_in"]["ymin"])
-        self.ymax_in = float(data_json["norm_in"]["ymax"])
+        self.minY = np.array(data_json["normalization_minY"], dtype=float).reshape(
+            -1, 1
+        )
+        self.maxY = np.array(data_json["normalization_maxY"], dtype=float).reshape(
+            -1, 1
+        )
 
-        # 4. Parameter Denormalisasi (Output)
-        self.xmin_out = float(data_json["norm_out"]["xmin"])
-        self.xmax_out = float(data_json["norm_out"]["xmax"])
-        self.ymin_out = float(data_json["norm_out"]["ymin"])
-        self.ymax_out = float(data_json["norm_out"]["ymax"])
+        # # 1. Bobot & Bias (Pastikan tipe data float)
+        # self.W1 = np.array(data_json["W1"], dtype=float)
+        # self.b1 = np.array(data_json["b1"], dtype=float).reshape(-1, 1)
+        # self.W2 = np.array(data_json["W2"], dtype=float).reshape(1, -1)
+        # self.b2 = np.array(data_json["b2"], dtype=float).flatten()[
+        #     0
+        # ]  # Ambil sebagai skalar
+
+        # # 2. Parameter Z-Score (Dari CSV Mentah)
+        # self.mean_in = np.array(data_json["mean_in"], dtype=float).reshape(-1, 1)
+        # self.std_in = np.array(data_json["std_in"], dtype=float).reshape(-1, 1)
+
+        # # 3. Parameter MapMinMax (Input)
+        # self.xmin_in = np.array(data_json["norm_in"]["xmin"], dtype=float).reshape(
+        #     -1, 1
+        # )
+        # self.xmax_in = np.array(data_json["norm_in"]["xmax"], dtype=float).reshape(
+        #     -1, 1
+        # )
+        # self.ymin_in = float(data_json["norm_in"]["ymin"])
+        # self.ymax_in = float(data_json["norm_in"]["ymax"])
+
+        # # 4. Parameter Denormalisasi (Output)
+        # self.xmin_out = float(data_json["norm_out"]["xmin"])
+        # self.xmax_out = float(data_json["norm_out"]["xmax"])
+        # self.ymin_out = float(data_json["norm_out"]["ymin"])
+        # self.ymax_out = float(data_json["norm_out"]["ymax"])
 
     def tansig(self, x):
         return (2 / (1 + np.exp(-2 * x))) - 1
 
     def calculate(self, features):
-        # Konversi input ke kolom vektor (5x1)
         x_raw = np.array(features, dtype=float).reshape(-1, 1)
 
-        # --- STEP 1: Z-SCORE ---
-        # Mengubah data mentah (misal HR 80) ke skala Z-score
-        x_manual = (x_raw - self.mean_in) / self.std_in
+        # Min-Max Normalization
+        rangeX = self.maxX - self.minX
+        rangeX[rangeX == 0] = 1
+        x_norm = (x_raw - self.minX) / rangeX * 2 - 1
 
-        # --- STEP 2: MAPMINMAX (Input) ---
-        # Mengubah hasil Z-score ke rentang ymin_in s/d ymax_in (biasanya -1 ke 1)
-        x_norm = (self.ymax_in - self.ymin_in) * (x_manual - self.xmin_in) / (
-            self.xmax_in - self.xmin_in
-        ) + self.ymin_in
-
-        # --- STEP 3: ARSITEKTUR JARINGAN ---
-        # Hidden Layer
+        # Forward pass
         z1 = np.dot(self.W1, x_norm) + self.b1
         a1 = self.tansig(z1)
-
-        # Output Layer (Linear/Purelin)
         a2 = np.dot(self.W2, a1) + self.b2
 
-        # --- STEP 4: REVERSE MAPMINMAX (Output) ---
-        # Mengembalikan angka -1 s/d 1 ke skala asli (misal SBP 120)
-        prediction = (a2 - self.ymin_out) * (self.xmax_out - self.xmin_out) / (
-            self.ymax_out - self.ymin_out
-        ) + self.xmin_out
+        # Denormalisasi
+        rangeY = self.maxY - self.minY
+        rangeY[rangeY == 0] = 1
+        y_original = (a2 + 1) / 2 * rangeY + self.minY
 
-        return round(float(prediction.item()), 4)
+        # Jika output > 1, return list
+        if y_original.shape[0] > 1:
+            return [round(float(v), 4) for v in y_original.flatten()]
+        return round(float(y_original.item()), 4)
 
 
 class MedStabilizer:
