@@ -4,7 +4,7 @@ import random
 import sqlite3
 import json
 import sys
-from datetime import datetime
+# from datetime import datetime
 
 # ============================================================
 # KONFIGURASI
@@ -64,7 +64,7 @@ def parse_signal(json_str):
         if isinstance(data, list):
             return data
         return []
-    except:
+    except (json.JSONDecodeError, TypeError):
         return []
 
 
