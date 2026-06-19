@@ -4,12 +4,23 @@ import random
 import sqlite3
 import json
 import sys
+
+# ============================================================
+# CARA 1: BACA ARGUMEN DARI COMMAND LINE
+# ============================================================
+# Contoh penggunaan:
+#   python simulate_client.py single WS-866501012348821
+#   python simulate_client.py multiple
+#   python simulate_client.py random
+# ============================================================
+
 # from datetime import datetime
 
 # ============================================================
 # KONFIGURASI
 # ============================================================
-SERVER_IP = "127.0.0.1"
+# SERVER_IP = "127.0.0.1"
+SERVER_IP = "103.93.134.24"
 SERVER_PORT = 5005
 PANJANG_BUFFER = 150
 DELAY_ANTAR_KIRIM = 10  # detik
@@ -71,7 +82,7 @@ def parse_signal(json_str):
 def kirim_data(token, ir_data, red_data):
     try:
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.settimeout(5.0)
+        client.settimeout(20.0)
         client.connect((SERVER_IP, SERVER_PORT))
 
         pesan = f"{token}|"
@@ -104,15 +115,6 @@ def main():
     print("=" * 60)
     print("SIMULASI KIRIM DATA KE SERVER (DARI SQLITE)")
     print("=" * 60)
-
-    # ============================================================
-    # CARA 1: BACA ARGUMEN DARI COMMAND LINE
-    # ============================================================
-    # Contoh penggunaan:
-    #   python simulate_client.py single WS-866501012348821
-    #   python simulate_client.py multiple
-    #   python simulate_client.py random
-    # ============================================================
 
     if len(sys.argv) >= 2:
         mode = sys.argv[1].lower()
