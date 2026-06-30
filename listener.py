@@ -29,14 +29,6 @@ class TCPHandler(socketserver.BaseRequestHandler):
                     )
                     break
 
-                # --- HEARTBEAT CHECK ---
-                if self.raw_data.strip() == "PING":
-                    self.request.sendall(b"PONG")
-                    print("[*] Heartbeat\t\t: PONG dikirim")
-
-                    self.request.settimeout(30.0)
-                    continue  # selesai, tidak perlu proses data
-
                 # --- TAMBAHAN: PEMISAHAN TOKEN DAN DATA ---
                 # data_parts[0] adalah TOKEN, data_parts[1] adalah SINYAL
                 data_parts = self.raw_data.strip().split("|")
